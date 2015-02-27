@@ -1,0 +1,7 @@
+project(My_Project)
+add_graphlab_executable(3profileEgo1 3profileEgo1.cpp)
+add_graphlab_executable(3profileEgo2subego 3profilesEgo2_egosampling.cpp)
+add_graphlab_executable(3profileEgo2subegofile 3profilesEgo2_egosamplingfile.cpp)
+ 
+ 
+
