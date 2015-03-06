@@ -20,3 +20,11 @@ An option (per_vertex) writes the 3-profile of each ego to file. The algorithm a
 	./3profileEgoSer --graph mygraph.txt --format tsv --id_list myegolist.txt --sample_iter 5
 
 
+##getLocalTriangles
+
+Local Triangle Counting.
+
+Given a graph, this program computes the total number of triangles in the graph. This is GraphLab Powergraph's standard undirected triangle count with wrappers for iteration, edge sampling, and runtime/network bandwidth statistics. A file counts_triangles.txt is appended with input file name, edge sampling probability, triangle count, and runtime. Network traffic is appended to netw_triangles.txt similarly. An option (per_vertex) is also provided which computes for each vertex, the number of triangles it is involved in. The algorithm assumes that each undirected edge appears exactly once in the graph input. If edges may appear more than once, this procedure will over count.
+
+	./getLocalTriangles --graph mygraph.txt --format tsv --sample_iter 10 --min_prob .5 --max_prob 1 --prob_step .1
+
