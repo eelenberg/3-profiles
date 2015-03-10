@@ -32,55 +32,14 @@
 //comment the following line if you want to use integer counters
 #define  DOUBLE_COUNTERS
 
-//using namespace boost::multiprecision;
 
-/**
- *
- *  
- * In this program we implement the "hash-set" version of the
- * "edge-iterator" algorithm described in
- * 
- *    T. Schank. Algorithmic Aspects of Triangle-Based Network Analysis.
- *    Phd in computer science, University Karlsruhe, 2007.
- *
- * The procedure is quite straightforward:
- *   - each vertex maintains a list of all of its neighbors in a hash set.
- *   - For each edge (u,v) in the graph, count the number of intersections
- *     of the neighbor set on u and the neighbor set on v.
- *   - We store the size of the intersection on the edge.
- * 
- * This will count every triangle exactly 3 times. Summing across all the
- * edges and dividing by 3 gives the desired result.
- *
- * The preprocessing stage take O(|E|) time, and it has been shown that this
- * algorithm takes $O(|E|^(3/2))$ time.
- *
- * If we only require total counts, we can introduce a optimization that is
- * similar to the "forward" algorithm
- * described in thesis above. Instead of maintaining a complete list of all
- * neighbors, each vertex only maintains a list of all neighbors with
- * ID greater than itself. This implicitly generates a topological sort
- * of the graph.
- *
- * Then you can see that each triangle
- *
- * \verbatim
-  
-     A----->C
-     |     ^
-     |   /
-     v /
-     B
-   
- * \endverbatim
- * Must be counted only once. (Only when processing edge AB, can one
- * observe that A and B have intersecting out-neighbor sets).
- */
- 
-
+// This code uses Graphlab's built in hopscotch hash set. 
+// It also borrows from GraphLab's built in undirected triangle count (Schank's thesis) and 3profileLocal.
 // Radix sort implementation from https://github.com/gorset/radix
 // Thanks to Erik Gorset
-//
+
+
+
 /*
 Copyright 2011 Erik Gorset. All rights reserved.
 
@@ -374,7 +333,7 @@ static size_t count_set_intersect(
 }
 
 
-//  CLIQUE FINDING CHANGES - NEW STRUCTURE.
+//  structure for clique finding
 struct twoids{
    graphlab::vertex_id_type first;
    graphlab::vertex_id_type second;
@@ -394,9 +353,8 @@ struct vertex_data_type {
   //vertex_data_type(): num_triangles(0){ }
   // A list of all its neighbors
   vid_vector vid_set;
-  // The number of triangles this vertex is involved it.
-  // only used if "per vertex counting" is used
-#ifdef DOUBLE_COUNTERS
+  
+  #ifdef DOUBLE_COUNTERS
   double num_triangles;
   double num_wedges;
   double num_wedges_e;
@@ -439,13 +397,7 @@ struct vertex_data_type {
 
 
 
-/*
- * Each edge is simply a counter of triangles
- *
- */
-//typedef uint32_t edge_data_type;
-
-//NEW EDGE DATA AND GATHER
+//new edge data for edge pivot equations
 struct edge_data_type {
   
 #ifdef DOUBLE_COUNTERS
@@ -565,50 +517,6 @@ struct clique_gather {
   }
 };
 
-struct edge_sum_gather {
-
-#ifdef DOUBLE_COUNTERS
-  double n3;
-  // double n2;
-  double n2e;
-  double n2c;
-  // double n1;
-  double n3_double;
-  double n2c_double;
-  double n2c_n3;
-#else
-  size_t n3;
-  // size_t n2;
-  size_t n2e;
-  size_t n2c;
-  // size_t n1;
-  size_t n3_double;
-  size_t n2c_double;
-  size_t n2c_n3;
-#endif
-  edge_sum_gather& operator+=(const edge_sum_gather& other) {
-    n3 += other.n3;
-    // n2 += other.n2;
-    n2e += other.n2e;
-    n2c += other.n2c;
-    // n1 += other.n1;
-    n3_double += other.n3_double;
-    n2c_double += other.n2c_double;
-    n2c_n3 += other.n2c_n3;
-    
-    return *this;
-  }
-
-  // serialize
-  void save(graphlab::oarchive& oarc) const {
-    oarc << n2c_n3 << n2c_double << n3_double << n2c << n2e << n3;
-  }
-
-  // deserialize
-  void load(graphlab::iarchive& iarc) {
-    iarc >> n2c_n3 >> n2c_double >> n3_double >> n2c >> n2e >> n3;
-  }
-};
 
 // To collect the set of neighbors, we need a message type which is
 // basically a set of vertex IDs
@@ -696,12 +604,11 @@ void init_vertex(graph_type::vertex_type& vertex) {
   vertex.data().num_wedges_c = 0; 
   vertex.data().num_disc = 0; 
   vertex.data().num_empty = 0;
-//Setting the ego flag randomly . If one wants to set it from a list. Then here is the place to change
+//Setting the ego flag randomly.
    if(graphlab::random::rand01() < vertex_egoprob)
     vertex.data().ego_flag=1;
-    else
+  else
     vertex.data().ego_flag=0;
-//  vertex.data().ego_flag=1;
    vertex.data().conn_neighbors.clear();
 }
 
@@ -712,12 +619,11 @@ void init_vertex_2(graph_type::vertex_type& vertex) {
   vertex.data().num_wedges_c = 0; 
   vertex.data().num_disc = 0; 
   vertex.data().num_empty = 0;
-//Setting the ego flag randomly . If one wants to set it from a list. Then here is the place to change
+//Setting the ego flag from a list
    if(std::count(unique_vertex_ids.begin(),unique_vertex_ids.end(),vertex.id())==1)
     vertex.data().ego_flag=1;
-    else
+  else
     vertex.data().ego_flag=0;
-//  vertex.data().ego_flag=1;
    vertex.data().conn_neighbors.clear();
 }
 
@@ -748,7 +654,6 @@ public:
   // Gather on all edges
   edge_dir_type gather_edges(icontext_type& context,
                              const vertex_type& vertex) const {
-    //sample edges here eventually, maybe by random edge.id() so consistent between the 2 engines?
     return graphlab::ALL_EDGES;
   } 
 
@@ -766,17 +671,7 @@ public:
     else{
       graphlab::vertex_id_type otherid = edge.target().id() == vertex.id() ?
                                        edge.source().id() : edge.target().id();
-
-    // size_t other_nbrs = (edge.target().id() == vertex.id()) ?
-    //     (edge.source().num_in_edges() + edge.source().num_out_edges()): 
-    //     (edge.target().num_in_edges() + edge.target().num_out_edges());
-
-    // size_t my_nbrs = vertex.num_in_edges() + vertex.num_out_edges();
-
-    //if (PER_VERTEX_COUNT || (other_nbrs > my_nbrs) || (other_nbrs == my_nbrs && otherid > vertex.id())) {
-    //if (PER_VERTEX_COUNT || otherid > vertex.id()) {
-      gather.v = otherid; //will this work? what is v??
-    //} 
+      gather.v = otherid;
    } 
    return gather;
   }
@@ -842,7 +737,6 @@ public:
       edge.data().n2c = srclist.vid_set.size() - tmp - 1;
       edge.data().n2e = targetlist.vid_set.size() - tmp - 1;       
 
-      // edge.data().n1 = context.num_vertices() - (tmp2 - tmp);
     }
   }
 };
@@ -896,8 +790,6 @@ public:
       gather.n2c_double = (gather.n2c)*(gather.n2c-1)/2;
       gather.n2c_n3 = gather.n3*gather.n2c;
     
-    //  std::vector<graphlab::vertex_id_type> srcne = edge.source().data().vid_set.vid_vec;
-    //  std::vector<graphlab::vertex_id_type> trgne = edge.target().data().vid_set.vid_vec;
       std::vector<graphlab::vertex_id_type> interlist;
         interlist.clear();    
     //  sort(srcne.begin(),srcne.end());
@@ -911,20 +803,15 @@ public:
       // std::cout<<"From the perspective of "<<vertex.id()<<std::endl;
       // std::cout<<"Common nes of "<<edge.source().id()<<" , "<< edge.target().id()<<std::endl;
       
-      //if(interlist.size()==0) /* Michael change - let's clear the set in anycase before populating it */
-      //gather.common.clear();          
-     
       if(vertex.id() == edge.source().id() ){
         for(size_t i=0;i<interlist.size();i++){
         
-       //  std::cout<<interlist.at(i)<<std::endl;
-
-         if (edge.target().id()< interlist.at(i)){
+        if (edge.target().id()< interlist.at(i)){
             twoids ele;
             ele.first=edge.target().id();
             ele.second=interlist.at(i);
             gather.common.push_back(ele);
-         }
+        }
        // For the accumulating src, if target < member of list then push (target,member). If inequality is other way, when src-> member edge  will take care- nodouble counts.
        }     
 
@@ -958,35 +845,23 @@ public:
     return gather;
   }
 
-  /* the gather result is the total sum of the number of triangles
-   * each adjacent edge is involved in . Dividing by 2 gives the
-   * desired result.
+  /* Gather the edge pivots and prepare to solve the system of equations
    */
   void apply(icontext_type& context, vertex_type& vertex,
              const gather_type& ecounts) {
-    //vertex.data().num_triangles = num_triangles / 2;
-    //vid_set.size() or vid_vec.size()
   // std::cout<<"Enter apply  2 of "<< vertex.id()  <<std::endl;
 
   // Do apply only when ego flag is set to 1.
   if(vertex.data().ego_flag==1) {
     vertex.data().num_triangles = ecounts.n3 / 2;
-    //vertex.data().num_wedges = ecounts.n2 - ( pow(vertex.data().vid_set.size(),2) + 3*vertex.data().vid_set.size() )/2 +
-      //  vertex.data().num_triangles;
 
     vertex.data().num_wedges_c = ecounts.n2c/2;
-    // vertex.data().num_wedges_e = ecounts.n2e;
-    // vertex.data().num_wedges = vertex.data().num_wedges_e + vertex.data().num_wedges_c;
 
     if(ecounts.common.size()==0)
       vertex.data().conn_neighbors.clear();
     else   
      vertex.data().conn_neighbors=ecounts.common;
-    //do the rest of clique finding here?? 
-    // if not, then add a scatter and move whats below into the apply of a new engine
-    // size_t h10v = 0;
-
-
+    
     //store gathers here temporarily
     vertex.data().num_wedges = ecounts.n3_double;
     vertex.data().num_disc = -2*ecounts.n3_double + ecounts.n2c_n3;
@@ -1001,61 +876,42 @@ public:
     return graphlab::OUT_EDGES;
   }
 
+/*clique counting with hopscotch set*/
   void scatter(icontext_type& context,
               const vertex_type& vertex,
               edge_type& edge) const {
     //    vertex_type othervtx = edge.target();
     if ((edge.data().sample_indicator == 1) && ((edge.source().data().ego_flag==1) || (edge.target().data().ego_flag==1))){
      
-       std::vector<twoids> list;
-       list.clear(); 
-     if(edge.target().data().ego_flag==1)
-        list= edge.target().data().conn_neighbors;
-     else
-        list= edge.source().data().conn_neighbors; 
-      //const vertex_data_type& targetlist = edge.target().data();
-      // std::vector<graphlab::vertex_id_type> srcne = edge.source().data().vid_set.vid_vec;
-      // std::vector<graphlab::vertex_id_type>  trgne = edge.target().data().vid_set.vid_vec;
+      std::vector<twoids> list;
+      list.clear(); 
+      if(edge.target().data().ego_flag==1)
+          list= edge.target().data().conn_neighbors;
+      else
+          list= edge.source().data().conn_neighbors; 
       std::vector<graphlab::vertex_id_type> interlist;
-          interlist.clear();    
-     // sort(srcne.begin(),srcne.end());
-     // sort(trgne.begin(),trgne.end());
+      interlist.clear();    
+       // sort(srcne.begin(),srcne.end());
+       // sort(trgne.begin(),trgne.end());
       edge.data().eqn10_const=0;     
       // interlist contains the intersection.  
-     // std::set_intersection(srcne.begin(),srcne.end(),trgne.begin(),trgne.end(),std::back_inserter(interlist));
-       // Again using the list intersect function on vid_set classes
-     interlist=list_intersect(edge.source().data().vid_set,edge.target().data().vid_set); 
+      // Again using the list intersect function on vid_set classes
+      interlist=list_intersect(edge.source().data().vid_set,edge.target().data().vid_set); 
 
       //Check for each pair of members if they have a common edge, if they do count.
-        graphlab::hopscotch_set<graphlab::vertex_id_type> *our_cset; 
-        our_cset = new graphlab::hopscotch_set<graphlab::vertex_id_type>(64);
-        foreach (graphlab::vertex_id_type v, interlist) {
-          our_cset->insert(v);
-        }
-
-//std::cout << "*** Hopscotch init time (scatter): " << ti_temp1.current_time() << " sec" << std::endl;
-
-         for(size_t k=0;k<list.size();k++) {
-            //graphlab::vertex_id_type num1=srclist.conn_neighbors.at(k).first;
-            //graphlab::vertex_id_type num2=srclist.conn_neighbors.at(k).second;
-            size_t flag1=0;
-      flag1 = our_cset->count(list.at(k).first) + our_cset->count(list.at(k).second);
-            //flag1 =(size_t)(our_cset->find(num1)!=our_cset->end()) + (size_t)(our_cset->find(num2)!=our_cset->end());
-            // for(size_t i=0;i<interlist.size();i++){
-            //    if((interlist.at(i)==num1)||(interlist.at(i)==num2))
-            //     flag1++;
-            //}
-            //if (2 == our_cset->count(srclist.conn_neighbors.at(k).first) + our_cset->count(srclist.conn_neighbors.at(k).second))
-            if(flag1==2) 
-            edge.data().eqn10_const++;
- 
-      //   if ( ((srclist.conn_neighbors.at(k).first==interlist.at(i))&&(srclist.conn_neighbors.at(k).second==interlist.at(j)))||((srclist.conn_neighbors.at(k).first==interlist.at(j)) && (srclist.conn_neighbors.at(k).second==interlist.at(i))) )
-        //    edge.data().eqn10_const++;
-        //  std::cout<<srclist.conn_neighbors.at(k).first<<" with " <<srclist.conn_neighbors.at(k).second<<std::endl;      
+      graphlab::hopscotch_set<graphlab::vertex_id_type> *our_cset; 
+      our_cset = new graphlab::hopscotch_set<graphlab::vertex_id_type>(64);
+      foreach (graphlab::vertex_id_type v, interlist) {
+        our_cset->insert(v);
       }
-//std::cout << "*** Triple FOR time (scatter): " << ti_temp1.current_time() << " sec" << std::endl;
 
 
+      for(size_t k=0;k<list.size();k++) {
+        size_t flag1=0;
+        flag1 = our_cset->count(list.at(k).first) + our_cset->count(list.at(k).second);
+        if(flag1==2) 
+          edge.data().eqn10_const++;
+      }
      
     }
   }
@@ -1095,30 +951,29 @@ public:
   //apply
   void apply(icontext_type& context, vertex_type& vertex,
              const gather_type& ecounts) {
-  if(vertex.data().ego_flag==1)
-  {
-    size_t h10 = ecounts.h10e/3.; //eqch clique counted by all 3 incoming edges
-    
-    //matrix inverse here??
-    /*0.333333333333333   0.333333333333333  -0.166666666666667  -1.000000000000000
-                      0  -1.000000000000000   0.500000000000000   3.000000000000000
-                      0   1.000000000000000                   0  -3.000000000000000
-                      0                   0                   0   1.000000000000000*/
+    if(vertex.data().ego_flag==1)
+    {
+      size_t h10 = ecounts.h10e/3.; //each clique counted by all 3 incoming edges
+      
+      //matrix inverse here, the first 3 columns have already been stored
+      /*0.333333333333333   0.333333333333333  -0.166666666666667  -1.000000000000000
+                        0  -1.000000000000000   0.500000000000000   3.000000000000000
+                        0   1.000000000000000                   0  -3.000000000000000
+                        0                   0                   0   1.000000000000000*/
 
-    //can get simpler system with just n3_double/n2c_double/n2c_n3 and n3*N(v), n2c*N(v)
-    // size_t h6 = (2*ecounts.n2c_double + 2*ecounts.n3_double - ecounts.n2c_n3 - 6*h10v)/6.;
-    // size_t h8 = (-2*ecounts.n3_double + ecounts.n2c_n3 + 6*h10v)/2.;
-    // size_t h9 = ecounts.n3_double - 3*h10v;
+      //in the future, we can get simpler system with just n3_double/n2c_double/n2c_n3 and n3*N(v), n2c*N(v)
+      // size_t h6 = (2*ecounts.n2c_double + 2*ecounts.n3_double - ecounts.n2c_n3 - 6*h10v)/6.;
+      // size_t h8 = (-2*ecounts.n3_double + ecounts.n2c_n3 + 6*h10v)/2.;
+      // size_t h9 = ecounts.n3_double - 3*h10v;
 
-    // vertex.data().num_triangles += h10;
-    // vertex.data().num_wedges = vertex.data().num_wedges_c + (vertex.data().num_wedges - 3*h10);
-    vertex.data().num_triangles = h10;
-    vertex.data().num_wedges -= 3*h10;
-    vertex.data().num_disc = (vertex.data().num_disc + 6*h10)/2;
-    vertex.data().num_empty = (vertex.data().num_empty - 6*h10)/6;
-    //print here instead of in main??
-    vertex.data().vid_set.clear(); //still necessary?? 
-  }   
+      // vertex.data().num_triangles += h10;
+      // vertex.data().num_wedges = vertex.data().num_wedges_c + (vertex.data().num_wedges - 3*h10);
+      vertex.data().num_triangles = h10;
+      vertex.data().num_wedges -= 3*h10;
+      vertex.data().num_disc = (vertex.data().num_disc + 6*h10)/2;
+      vertex.data().num_empty = (vertex.data().num_empty - 6*h10)/6;
+      vertex.data().vid_set.clear(); //still necessary?? 
+    }   
   }
 
   // No scatter
@@ -1158,22 +1013,11 @@ size_t get_edge_sample_indicator(const graph_type::edge_type& e){
  */
 struct save_profile_count{
   std::string save_vertex(graph_type::vertex_type v) { 
-  //   double nt = v.data().num_triangles;
-  //   double n_followed = v.num_out_edges();
-  //   double n_following = v.num_in_edges();
-
     //print?
-    #if 0
-    std::cout << "Estimators for vertex " << v.id() << ": " << (v.data().num_triangles)/pow(sample_prob_keep, 3) << " "
-    << (v.data().num_wedges)/pow(sample_prob_keep, 2) - (1-sample_prob_keep)*(v.data().num_triangles)/pow(sample_prob_keep, 3) << " "
-    << (v.data().num_disc)/sample_prob_keep - (1-sample_prob_keep)*(v.data().num_wedges)/pow(sample_prob_keep, 2) << " "
-    << (v.data().num_empty)-(1-sample_prob_keep)*(v.data().num_disc)/sample_prob_keep << std::endl;
-    #endif
-  //   return graphlab::tostr(v.id()) + "\t" +
-  //          graphlab::tostr(nt) + "\t" +
-  //          graphlab::tostr(n_followed) + "\t" + 
-  //          graphlab::tostr(n_following) + "\n";
-  //
+    // std::cout << "Estimators for vertex " << v.id() << ": " << (v.data().num_triangles)/pow(sample_prob_keep, 3) << " "
+    // << (v.data().num_wedges)/pow(sample_prob_keep, 2) - (1-sample_prob_keep)*(v.data().num_triangles)/pow(sample_prob_keep, 3) << " "
+    // << (v.data().num_disc)/sample_prob_keep - (1-sample_prob_keep)*(v.data().num_wedges)/pow(sample_prob_keep, 2) << " "
+    // << (v.data().num_empty)-(1-sample_prob_keep)*(v.data().num_disc)/sample_prob_keep << std::endl;    
   /* WE SHOULD SCALE THE LOCAL COUNTS WITH p_sample BEFORE WRITING TO FILE!!!*/
   return 
           graphlab::tostr(v.id()) + "\t" +
@@ -1182,11 +1026,6 @@ struct save_profile_count{
           graphlab::tostr(v.data().num_wedges) + "\t" +
           graphlab::tostr(v.data().num_disc) + "\t" +
           graphlab::tostr(v.data().num_empty) + "\n";
-      //   graphlab::tostr((v.data().num_triangles)/pow(sample_prob_keep, 3)) + "\t" +
-       //  graphlab::tostr((v.data().num_wedges)/pow(sample_prob_keep, 2) - (1-sample_prob_keep)*(v.data().num_triangles)/pow(sample_prob_keep, 3)) + "\t" +
-       //  graphlab::tostr((v.data().num_disc)/sample_prob_keep - (1-sample_prob_keep)*(v.data().num_wedges)/pow(sample_prob_keep, 2)) + "\t" +
-       //  graphlab::tostr((v.data().num_empty)-(1-sample_prob_keep)*(v.data().num_disc)/sample_prob_keep) + '\n';
-  
   }
   std::string save_edge(graph_type::edge_type e) {
     return "";
@@ -1196,13 +1035,16 @@ struct save_profile_count{
 
 int main(int argc, char** argv) {
 
-  graphlab::command_line_options clopts("Exact Triangle Counting. "
-    "Given a graph, this program computes the total number of triangles "
-    "in the graph. An option (per_vertex) is also provided which "
-    "computes for each vertex, the number of triangles it is involved in."
-    "The algorithm assumes that each undirected edge appears exactly once "
-    "in the graph input. If edges may appear more than once, this procedure "
-    "will over count.");
+  graphlab::command_line_options clopts("Ego 3-profile Counting (parallel). "
+    "Given an undirected graph, this program computes the global 3-profile "
+    "for a subset of ego subgraphs. The subset can be specified by an input "
+    "file (id_list) containing vertex ids; otherwise, vertices are included "
+    "with probability p. The ego 3-profiles of all selceted vertices are computed "
+    "in parallel. A file counts_3_egosP.txt is appended with input filename and "
+    "runtime. Network traffic is appended to netw_counts_3_egosP.txt similarly. "
+    "An option (per_vertex) writes the 3-profile of each ego to file. The algorithm "
+    "assumes that each undirected edge appears exactly once in the graph input. If "
+    "edges may appear more than once, this procedure will over count. ");
   std::string prefix, format;
   std::string per_vertex;
   std::string vertex_id_filename;
@@ -1212,9 +1054,8 @@ int main(int argc, char** argv) {
   clopts.attach_option("format", format,
                        "The graph format");
   clopts.attach_option("id_list", vertex_id_filename,
-                       "Vertex ID list. calculate egos on all vertices in this file");
- 
- clopts.attach_option("ht", HASH_THRESHOLD,
+                       "Vertex ID list. calculate egos on all vertices in this file"); 
+  clopts.attach_option("ht", HASH_THRESHOLD,
                        "Above this size, hash sets are used");
   clopts.attach_option("per_vertex", per_vertex,
                        "If not empty, will count the number of "
@@ -1222,18 +1063,18 @@ int main(int argc, char** argv) {
                        "save to file with prefix \"[per_vertex]\". "
                        "The algorithm used is slightly different "
                        "and thus will be a little slower");
- clopts.attach_option("sample_keep_prob", sample_prob_keep,
+  clopts.attach_option("sample_keep_prob", sample_prob_keep,
                        "Probability of keeping edge during sampling");
-clopts.attach_option("sample_iter", sample_iter,
-                       "Number of sampling iterations (global count)");
-clopts.attach_option("min_prob", min_prob,
-                       "min prob");
-clopts.attach_option("max_prob", max_prob,
-                       "max prob");
-clopts.attach_option("prob_step", prob_step,
-                       "prob step");
-clopts.attach_option("vertex_egoprob", vertex_egoprob,
-                       "Ego sampling prob");
+  clopts.attach_option("sample_iter", sample_iter,
+                         "Number of sampling iterations (global count)");
+  clopts.attach_option("min_prob", min_prob,
+                         "min prob");
+  clopts.attach_option("max_prob", max_prob,
+                         "max prob");
+  clopts.attach_option("prob_step", prob_step,
+                         "prob step");
+  clopts.attach_option("vertex_egoprob", vertex_egoprob,
+                         "If no id list, use this ego sampling probability");
 
   if(!clopts.parse(argc, argv)) return EXIT_FAILURE;
   if (prefix == "") {
@@ -1270,7 +1111,7 @@ clopts.attach_option("vertex_egoprob", vertex_egoprob,
   dc.cout() << "sample_iter = " << sample_iter << std::endl;
 
   std::ifstream IDstream;
-  IDstream.open(vertex_id_filename.c_str(),std::ifstream::in); //is this ok?
+  IDstream.open(vertex_id_filename.c_str(),std::ifstream::in);
   size_t id;
   std::string linestring;
   while (getline(IDstream,linestring)) {
@@ -1302,7 +1143,7 @@ clopts.attach_option("vertex_egoprob", vertex_egoprob,
 
     graphlab::timer ti;
     
-    // Initialize the vertex data
+    // Initialize the vertex data, randomly or from file
     if (vertex_id_filename == "") {
     graph.transform_vertices(init_vertex);
     }
@@ -1333,9 +1174,6 @@ clopts.attach_option("vertex_egoprob", vertex_egoprob,
     //total_edges = graph.map_reduce_vertices<size_t>(get_vertex_degree)/2;  
     //dc.cout() << "Total edges counted (after sampling) using degrees:" << total_edges << std::endl;
 
-    //cannot put second engine before conditional?
-    //graphlab::timer ti2;
-    
     graphlab::synchronous_engine<get_per_vertex_count> engine2(dc, graph, clopts);
     engine2.signal_all();
     engine2.start();
@@ -1349,24 +1187,12 @@ clopts.attach_option("vertex_egoprob", vertex_egoprob,
     //dc.cout() << "Total Running time is: " << ti.current_time() << "seconds" << std::endl;
     
     //no global counts, just print/write each ego subgraph without rescaling
-   // if (PER_VERTEX_COUNT == false) {
-       vertex_data_type global_counts = graph.map_reduce_vertices<vertex_data_type>(get_vertex_data);
+      vertex_data_type global_counts = graph.map_reduce_vertices<vertex_data_type>(get_vertex_data);
 
-    //   //size_t denom = (graph.num_vertices()*(graph.num_vertices()-1)*(graph.num_vertices()-2))/6.; //normalize by |V| choose 3, THIS IS NOT ACCURATE!
-    //   //size_t denom = 1;
-    //   //dc.cout() << "denominator: " << denom << std::endl;
-    // //  dc.cout() << "Global count: " << global_counts.num_triangles/3 << "  " << global_counts.num_wedges/3 << "  " << global_counts.num_disc/3 << "  " << global_counts.num_empty/3 << "  " << std::endl;
-    //   //dc.cout() << "Global count (normalized): " << global_counts.num_triangles/(denom*3.) << "  " << global_counts.num_wedges/(denom*3.) << "  " << global_counts.num_disc/(denom*3.) << "  " << global_counts.num_empty/(denom*3.) << "  " << std::endl;
-    //   dc.cout() << "Global count from estimators: " 
-  	 //      << (global_counts.num_triangles/3)/pow(sample_prob_keep, 3) << " "
-  	 //      << (global_counts.num_wedges/3)/pow(sample_prob_keep, 2) - (1-sample_prob_keep)*(global_counts.num_triangles/3)/pow(sample_prob_keep, 3) << " "
-   	//       << (global_counts.num_disc/3)/sample_prob_keep - (1-sample_prob_keep)*(global_counts.num_wedges/3)/pow(sample_prob_keep, 2) << " "
-  	 //      << (global_counts.num_empty/3)-(1-sample_prob_keep)*(global_counts.num_disc/3)/sample_prob_keep  << " "
-  	 //      << std::endl;
 
       total_time = ti.current_time();
       dc.cout() << "Total runtime: " << total_time << "sec." << std::endl;
- // JUST printing global counts.     
+      //printing global counts.     
       std::cout.precision(20);
       std::cout << "Total Ego N_10:" <<global_counts.num_triangles << std::endl; 
       std::cout << "Total Ego N_9:" <<global_counts.num_wedges<< std::endl;
@@ -1377,7 +1203,7 @@ clopts.attach_option("vertex_egoprob", vertex_egoprob,
 
       std::ofstream myfile;
       char fname[30];
-      sprintf(fname,"counts_3_egos2.txt");
+      sprintf(fname,"counts_3_egosP.txt");
       bool is_new_file = true;
       if (std::ifstream(fname)){
         is_new_file = false;
@@ -1394,18 +1220,16 @@ clopts.attach_option("vertex_egoprob", vertex_egoprob,
 
       myfile.close();
 
-      sprintf(fname,"netw_3_egos2_%d.txt",dc.procid());
+      sprintf(fname,"netw_3_egosP_%d.txt",dc.procid());
       myfile.open (fname,std::fstream::in | std::fstream::out | std::fstream::app);
   
       myfile << dc.network_bytes_sent() - reference_bytes <<"\n";
 
       myfile.close();
 
-   // }
-    //else {
      
      if (PER_VERTEX_COUNT == true){
-	 graph.save(per_vertex,
+    	 graph.save(per_vertex,
               save_profile_count(),
               false, /* no compression */
               true, /* save vertex */
@@ -1414,7 +1238,6 @@ clopts.attach_option("vertex_egoprob", vertex_egoprob,
               // clopts.get_ncpus());
      }
 
-   // }
     
 
   }//for iterations
