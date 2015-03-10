@@ -32,55 +32,11 @@
 //comment the following line if you want to use integer counters
 #define  DOUBLE_COUNTERS
 
-//using namespace boost::multiprecision;
-
-/**
- *
- *  
- * In this program we implement the "hash-set" version of the
- * "edge-iterator" algorithm described in
- * 
- *    T. Schank. Algorithmic Aspects of Triangle-Based Network Analysis.
- *    Phd in computer science, University Karlsruhe, 2007.
- *
- * The procedure is quite straightforward:
- *   - each vertex maintains a list of all of its neighbors in a hash set.
- *   - For each edge (u,v) in the graph, count the number of intersections
- *     of the neighbor set on u and the neighbor set on v.
- *   - We store the size of the intersection on the edge.
- * 
- * This will count every triangle exactly 3 times. Summing across all the
- * edges and dividing by 3 gives the desired result.
- *
- * The preprocessing stage take O(|E|) time, and it has been shown that this
- * algorithm takes $O(|E|^(3/2))$ time.
- *
- * If we only require total counts, we can introduce a optimization that is
- * similar to the "forward" algorithm
- * described in thesis above. Instead of maintaining a complete list of all
- * neighbors, each vertex only maintains a list of all neighbors with
- * ID greater than itself. This implicitly generates a topological sort
- * of the graph.
- *
- * Then you can see that each triangle
- *
- * \verbatim
-  
-     A----->C
-     |     ^
-     |   /
-     v /
-     B
-   
- * \endverbatim
- * Must be counted only once. (Only when processing edge AB, can one
- * observe that A and B have intersecting out-neighbor sets).
- */
- 
-
+// This code uses Graphlab's built in hopscotch hash set. 
+// It also borrows from GraphLab's built in undirected triangle count (Schank's thesis) and 3profileLocal.
 // Radix sort implementation from https://github.com/gorset/radix
 // Thanks to Erik Gorset
-//
+ 
 /*
 Copyright 2011 Erik Gorset. All rights reserved.
 
@@ -373,7 +329,7 @@ static size_t count_set_intersect(
 }
 
 
-//  CLIQUE FINDING CHANGES - NEW STRUCTURE.
+//  structure for clique finding
 struct twoids{
    graphlab::vertex_id_type first;
    graphlab::vertex_id_type second;
@@ -437,12 +393,6 @@ struct vertex_data_type {
 };
 
 
-
-/*
- * Each edge is simply a counter of triangles
- *
- */
-//typedef uint32_t edge_data_type;
 
 //NEW EDGE DATA AND GATHER
 struct edge_data_type {
@@ -731,7 +681,6 @@ public:
   // Gather on all edges
   edge_dir_type gather_edges(icontext_type& context,
                              const vertex_type& vertex) const {
-    //sample edges here eventually, maybe by random edge.id() so consistent between the 2 engines?
     return graphlab::ALL_EDGES;
   } 
 
@@ -879,23 +828,11 @@ public:
       gather.n2c_double = (gather.n2c)*(gather.n2c-1)/2;
       gather.n2c_n3 = gather.n3*gather.n2c;
     
-    //  std::vector<graphlab::vertex_id_type> srcne = edge.source().data().vid_set.vid_vec;
-    //  std::vector<graphlab::vertex_id_type> trgne = edge.target().data().vid_set.vid_vec;
       std::vector<graphlab::vertex_id_type> interlist;
         interlist.clear();    
-    //  sort(srcne.begin(),srcne.end());
-    //  sort(trgne.begin(),trgne.end());
       gather.common.clear();      
-      // interlist contains the intersection.  
-    //  std::set_intersection(srcne.begin(),srcne.end(),trgne.begin(),trgne.end(),std::back_inserter(interlist));
-     //Using the list_intersect function newly created
        interlist=list_intersect(edge.source().data().vid_set,edge.target().data().vid_set); 
     
-      // std::cout<<"From the perspective of "<<vertex.id()<<std::endl;
-      // std::cout<<"Common nes of "<<edge.source().id()<<" , "<< edge.target().id()<<std::endl;
-      
-      //if(interlist.size()==0) /* Michael change - let's clear the set in anycase before populating it */
-      //gather.common.clear();          
      
       if(vertex.id() == edge.source().id() ){
         for(size_t i=0;i<interlist.size();i++){
@@ -947,20 +884,14 @@ public:
    */
   void apply(icontext_type& context, vertex_type& vertex,
              const gather_type& ecounts) {
-    //vertex.data().num_triangles = num_triangles / 2;
-    //vid_set.size() or vid_vec.size()
-  // std::cout<<"Enter apply  2 of "<< vertex.id()  <<std::endl;
+   // std::cout<<"Enter apply  2 of "<< vertex.id()  <<std::endl;
 
   // Do apply only when ego flag is set to 1.
   if(vertex.data().ego_flag==1) {
     vertex.data().num_triangles = ecounts.n3 / 2;
-    //vertex.data().num_wedges = ecounts.n2 - ( pow(vertex.data().vid_set.size(),2) + 3*vertex.data().vid_set.size() )/2 +
-      //  vertex.data().num_triangles;
-
+ 
     vertex.data().num_wedges_c = ecounts.n2c/2;
-    // vertex.data().num_wedges_e = ecounts.n2e;
-    // vertex.data().num_wedges = vertex.data().num_wedges_e + vertex.data().num_wedges_c;
-
+ 
     if(ecounts.common.size()==0)
       vertex.data().conn_neighbors.clear();
     else   
@@ -996,17 +927,12 @@ public:
         list= edge.target().data().conn_neighbors;
      else
         list= edge.source().data().conn_neighbors; 
-      //const vertex_data_type& targetlist = edge.target().data();
-      // std::vector<graphlab::vertex_id_type> srcne = edge.source().data().vid_set.vid_vec;
-      // std::vector<graphlab::vertex_id_type>  trgne = edge.target().data().vid_set.vid_vec;
-      std::vector<graphlab::vertex_id_type> interlist;
+       std::vector<graphlab::vertex_id_type> interlist;
           interlist.clear();    
      // sort(srcne.begin(),srcne.end());
      // sort(trgne.begin(),trgne.end());
       edge.data().eqn10_const=0;     
-      // interlist contains the intersection.  
-     // std::set_intersection(srcne.begin(),srcne.end(),trgne.begin(),trgne.end(),std::back_inserter(interlist));
-       // Again using the list intersect function on vid_set classes
+     // Again using the list intersect function on vid_set classes
      interlist=list_intersect(edge.source().data().vid_set,edge.target().data().vid_set); 
 
       //Check for each pair of members if they have a common edge, if they do count.
@@ -1019,26 +945,10 @@ public:
 //std::cout << "*** Hopscotch init time (scatter): " << ti_temp1.current_time() << " sec" << std::endl;
 
          for(size_t k=0;k<list.size();k++) {
-            //graphlab::vertex_id_type num1=srclist.conn_neighbors.at(k).first;
-            //graphlab::vertex_id_type num2=srclist.conn_neighbors.at(k).second;
             size_t flag1=0;
       flag1 = our_cset->count(list.at(k).first) + our_cset->count(list.at(k).second);
-            //flag1 =(size_t)(our_cset->find(num1)!=our_cset->end()) + (size_t)(our_cset->find(num2)!=our_cset->end());
-            // for(size_t i=0;i<interlist.size();i++){
-            //    if((interlist.at(i)==num1)||(interlist.at(i)==num2))
-            //     flag1++;
-            //}
-            //if (2 == our_cset->count(srclist.conn_neighbors.at(k).first) + our_cset->count(srclist.conn_neighbors.at(k).second))
             if(flag1==2) 
             edge.data().eqn10_const++;
- 
-      //   if ( ((srclist.conn_neighbors.at(k).first==interlist.at(i))&&(srclist.conn_neighbors.at(k).second==interlist.at(j)))||((srclist.conn_neighbors.at(k).first==interlist.at(j)) && (srclist.conn_neighbors.at(k).second==interlist.at(i))) )
-        //    edge.data().eqn10_const++;
-        //  std::cout<<srclist.conn_neighbors.at(k).first<<" with " <<srclist.conn_neighbors.at(k).second<<std::endl;      
-      }
-//std::cout << "*** Triple FOR time (scatter): " << ti_temp1.current_time() << " sec" << std::endl;
-
-
      
     }
   }
@@ -1146,17 +1056,10 @@ struct save_profile_count{
   //   double n_following = v.num_in_edges();
 
     //print?
-    #if 0
-    std::cout << "Estimators for vertex " << v.id() << ": " << (v.data().num_triangles)/pow(sample_prob_keep, 3) << " "
-    << (v.data().num_wedges)/pow(sample_prob_keep, 2) - (1-sample_prob_keep)*(v.data().num_triangles)/pow(sample_prob_keep, 3) << " "
-    << (v.data().num_disc)/sample_prob_keep - (1-sample_prob_keep)*(v.data().num_wedges)/pow(sample_prob_keep, 2) << " "
-    << (v.data().num_empty)-(1-sample_prob_keep)*(v.data().num_disc)/sample_prob_keep << std::endl;
-    #endif
-  //   return graphlab::tostr(v.id()) + "\t" +
-  //          graphlab::tostr(nt) + "\t" +
-  //          graphlab::tostr(n_followed) + "\t" + 
-  //          graphlab::tostr(n_following) + "\n";
-  //
+    // std::cout << "Estimators for vertex " << v.id() << ": " << (v.data().num_triangles)/pow(sample_prob_keep, 3) << " "
+    // << (v.data().num_wedges)/pow(sample_prob_keep, 2) - (1-sample_prob_keep)*(v.data().num_triangles)/pow(sample_prob_keep, 3) << " "
+    // << (v.data().num_disc)/sample_prob_keep - (1-sample_prob_keep)*(v.data().num_wedges)/pow(sample_prob_keep, 2) << " "
+    // << (v.data().num_empty)-(1-sample_prob_keep)*(v.data().num_disc)/sample_prob_keep << std::endl;
   /* WE SHOULD SCALE THE LOCAL COUNTS WITH p_sample BEFORE WRITING TO FILE!!!*/
   return 
           graphlab::tostr(v.id()) + "\t" +

@@ -14,9 +14,10 @@ Given an undirected graph, this program computes the frequencies of all subgraph
 
 Ego 3-profile Counting (serial).
 
-Given an undirected graph, this program computes the global 3-profile for a specified list of ego subgraphs (id_list). For vertex id in the input list, the serial algorithm computes the ego subgraph induced by its neighbors and then calculates the 3-profile of this graph. A file counts_3_egos.txt is appended with input filename and runtime. Network traffic is appended to netw_counts_3_egos.txt similarly. An option (per_vertex) writes the 3-profile of each ego to file. The algorithm assumes that each undirected edge appears exactly once in the graph input. If edges may appear more than once, this procedure will over count.
+Given an undirected graph, this program computes the global 3-profile for a specified list of ego subgraphs (id_list). For vertex id in the input list, the serial algorithm computes the ego subgraph induced by its neighbors and then calculates the 3-profile of this graph. A file counts_3_egos.txt is appended with input filename and runtime. Network traffic is appended to netw_counts_3_egos.txt similarly. A flag (per_vertex) controls printing the 3-profile of each ego to standard output. The algorithm assumes that each undirected edge appears exactly once in the graph input. If edges may appear more than once, this procedure will over count.
 
 	./3profileEgoSer --graph mygraph.txt --format tsv --id_list myegolist.txt --sample_iter 5
+	./3profileEgoSer --graph mygraph.txt --format tsv --id_list myegolist.txt --per_vertex 1
 
 
 ## 3profileEgoParsubegofile

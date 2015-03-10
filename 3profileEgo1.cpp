@@ -125,7 +125,7 @@ void radix_sort(graphlab::vertex_id_type *array, int offset, int end, int shift)
     }
 }
 
-size_t HASH_THRESHOLD = 1000000000;//64; //must this stay hardcoded? for a fair comparison, yes
+size_t HASH_THRESHOLD = 64;//1000000000;
 
 // We on each vertex, either a vector of sorted VIDs
 // or a hash set (cuckoo hash) of VIDs.
@@ -1034,7 +1034,7 @@ int main(int argc, char** argv) {
     "calculates the 3-profile of this graph. "
     "A file counts_3_egos.txt is appended with input filename and runtime. "
     "Network traffic is appended to netw_counts_3_egos.txt similarly. "
-    "An option (per_vertex) writes the 3-profile of each ego to file. "
+    "A flag (per_vertex) controls printing the 3-profile of each ego to standard output. "
     "The algorithm assumes that each undirected edge appears exactly once "
     "in the graph input. If edges may appear more than once, this procedure "
     "will over count. ");
@@ -1190,8 +1190,13 @@ int main(int argc, char** argv) {
 
     total_time = ti.current_time();
     dc.cout() << "Total runtime: " << total_time << "sec." << std::endl;
-    // num_h10 = num_h10/4;
-    // num_h9 = num_h9/2;
+
+    // //global counts not stored anywhere except printed
+    // vertex_data_type global_counts = graph.map_reduce_vertices<vertex_data_type>(get_vertex_data);
+    // num_h10 = global_counts.num_triangles/4;
+    // num_h9 = global_counts.num_wedges/2;
+    // num_h8 = global_counts.num_disc;
+    // num_h6 = global_counts.num_empty;
     // dc.cout() << "Number of ego triangles (N10): " << num_h10 << std::endl; 
     // dc.cout() << "Number of ego wedge (N9): " << num_h9 << std::endl; 
     // dc.cout() << "Number of ego disc (N8): " << num_h8 << std::endl; 
