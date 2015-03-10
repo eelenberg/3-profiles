@@ -23,7 +23,7 @@ Given an undirected graph, this program computes the global 3-profile for a spec
 
 Ego 3-profile Counting (parallel).
 
-Given an undirected graph, this program computes the global 3-profile for a subset of ego subgraphs. The subset can be specified by an input file (id_list) containing vertex ids; otherwise, vertices are included with probability p. The ego 3-profiles of all selceted vertices are computed in parallel. A file counts_3_egosP.txt is appended with input filename and runtime. Network traffic is appended to netw_counts_3_egosP.txt similarly. An option (per_vertex) writes the 3-profile of each ego to file. The algorithm assumes that each undirected edge appears exactly once in the graph input. If edges may appear more than once, this procedure will over count.
+Given an undirected graph, this program computes the global 3-profile for a subset of ego subgraphs. The subset can be specified by an input file (id_list) containing vertex ids; otherwise, vertices are included with probability (vertex_egoprob). The ego 3-profiles of all selceted vertices are computed in parallel. A file counts_3_egosP.txt is appended with input filename, runtime, ego probability, and number of egos. Network traffic is appended to netw_counts_3_egosP.txt similarly. An option (per_vertex) writes the 3-profile of each ego to file. The algorithm assumes that each undirected edge appears exactly once in the graph input. If edges may appear more than once, this procedure will over count.
 
 	./3profileEgoParsubegofile --graph mygraph.txt --format tsv --id_list myegolist.txt --sample_iter 5
 

@@ -1209,7 +1209,7 @@ int main(int argc, char** argv) {
         is_new_file = false;
       }
       myfile.open (fname,std::fstream::in | std::fstream::out | std::fstream::app);
-      if(is_new_file) myfile << "#graph\tsample_prob_keep\ttriangles\twedges\tdisc\tempty\truntime" << std::endl;
+      if(is_new_file) myfile << "#graph\tsample_prob_keep\truntime\tego_prob\tnum_egos" << std::endl;
       myfile << prefix << "\t"
            << sample_prob_keep << "\t"
            << std::setprecision (6)
