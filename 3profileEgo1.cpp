@@ -843,9 +843,9 @@ public:
       // // "Iteration: " << context.iteration() << ", ego 3 profile "<< 
       vertex.id() << "\t" 
       << round((neighborhood_ecounts.n3/3)/pow(sample_prob_keep, 3)) << "\t" 
-      << round((neighborhood_ecounts.n2/3)/pow(sample_prob_keep, 2) - (1-sample_prob_keep)*(neighborhood_ecounts.n3/3)/pow(sample_prob_keep, 2)) << "\t"
-      << round((neighborhood_ecounts.n2e/3)/sample_prob_keep - (1-sample_prob_keep)*(neighborhood_ecounts.n2/3)/pow(sample_prob_keep, 2))<< "\t" 
-      << round((neighborhood_ecounts.n1/3) - (1-sample_prob_keep)*(neighborhood_ecounts.n2e/3)/sample_prob_keep) << std::endl;
+      << round((neighborhood_ecounts.n2/3)/pow(sample_prob_keep, 2) - 3*(1-sample_prob_keep)*(neighborhood_ecounts.n3/3)/pow(sample_prob_keep, 3)) << "\t"
+      << round((neighborhood_ecounts.n2e/3)/sample_prob_keep - 2*(1-sample_prob_keep)*(neighborhood_ecounts.n2/3)/pow(sample_prob_keep, 2) + 3*pow(1-sample_prob_keep,2)*(neighborhood_ecounts.n3/3)/pow(sample_prob_keep, 3))<< "\t" 
+      << round((neighborhood_ecounts.n1/3)-(1-sample_prob_keep)*(neighborhood_ecounts.n2e/3)/sample_prob_keep + pow(1-sample_prob_keep,2)*(neighborhood_ecounts.n2/3)/pow(sample_prob_keep, 2) - pow(1-sample_prob_keep,3)*(neighborhood_ecounts.n3/3)/pow(sample_prob_keep, 3)) << std::endl;
     }
     
     size_t tosig = context.iteration()/5 + 1;  

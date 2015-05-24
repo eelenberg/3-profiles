@@ -710,7 +710,7 @@ public:
     vertex.data().num_wedges = vertex.data().num_wedges_e + vertex.data().num_wedges_c;
     // vertex.data().num_disc = ecounts.n1 + total_edges - vertex.data().vid_set.size() - vertex.data().num_triangles - vertex.data().num_wedges_e;
     vertex.data().num_disc = ecounts.n1 + total_edges - 3*vertex.data().num_triangles + pow(vertex.data().vid_set.size(),2) - ecounts.n2;
-    vertex.data().num_empty = (context.num_vertices()  - 1)*(context.num_vertices() - 2)/2 - 
+    vertex.data().num_empty = ((double)context.num_vertices()  - 1)*((double)context.num_vertices() - 2)/2 - 
         (vertex.data().num_triangles + vertex.data().num_wedges + vertex.data().num_disc);
     vertex.data().vid_set.clear(); //still necessary??    
   }
@@ -878,12 +878,15 @@ int main(int argc, char** argv) {
     if (PER_VERTEX_COUNT == false) {
       vertex_data_type global_counts = graph.map_reduce_vertices<vertex_data_type>(get_vertex_data);
 
+      double profileEst[4] = {};
+      profileEst[0] = (global_counts.num_triangles/3)/pow(sample_prob_keep, 3);
+      profileEst[1] = (global_counts.num_wedges/3)/pow(sample_prob_keep, 2) - 3*(1-sample_prob_keep)*(global_counts.num_triangles/3)/pow(sample_prob_keep, 3);
+      profileEst[2] = (global_counts.num_disc/3)/sample_prob_keep - 2*(1-sample_prob_keep)*(global_counts.num_wedges/3)/pow(sample_prob_keep, 2) + 3*pow(1-sample_prob_keep,2)*(global_counts.num_triangles/3)/pow(sample_prob_keep, 3);
+      profileEst[3] = (global_counts.num_empty/3)-(1-sample_prob_keep)*(global_counts.num_disc/3)/sample_prob_keep + pow(1-sample_prob_keep,2)*(global_counts.num_wedges/3)/pow(sample_prob_keep, 2) - pow(1-sample_prob_keep,3)*(global_counts.num_triangles/3)/pow(sample_prob_keep, 3);
+
       dc.cout() << "Global count from estimators: " 
-  	      << (global_counts.num_triangles/3)/pow(sample_prob_keep, 3) << " "
-  	      << (global_counts.num_wedges/3)/pow(sample_prob_keep, 2) - (1-sample_prob_keep)*(global_counts.num_triangles/3)/pow(sample_prob_keep, 3) << " "
-   	      << (global_counts.num_disc/3)/sample_prob_keep - (1-sample_prob_keep)*(global_counts.num_wedges/3)/pow(sample_prob_keep, 2) << " "
-  	      << (global_counts.num_empty/3)-(1-sample_prob_keep)*(global_counts.num_disc/3)/sample_prob_keep  << " "
-  	      << std::endl;
+  	      << profileEst[0] << " " << profileEst[1] << " " 
+          << profileEst[2] << " " << profileEst[3] << " "  << std::endl;
 
       total_time = ti.current_time();
       dc.cout() << "Total runtime: " << total_time << "sec." << std::endl;
@@ -898,11 +901,11 @@ int main(int argc, char** argv) {
       if(is_new_file) myfile << "#graph\tsample_prob_keep\ttriangles\twedges\tdisc\tempty\truntime" << std::endl;
       myfile << prefix << "\t"
 	     << sample_prob_keep << "\t"
-             << std::setprecision (std::numeric_limits<double>::digits10 + 3)
-             << round((global_counts.num_triangles/3)/pow(sample_prob_keep, 3)) << "\t"
-             << round((global_counts.num_wedges/3)/pow(sample_prob_keep, 2) - (global_counts.num_triangles/3)*(1-sample_prob_keep)/pow(sample_prob_keep, 3)) << "\t"
-             << round((global_counts.num_disc/3)/sample_prob_keep - (global_counts.num_wedges/3)*(1-sample_prob_keep)/pow(sample_prob_keep, 2)) << "\t"
-             << round((global_counts.num_empty/3)-(global_counts.num_disc/3)*(1-sample_prob_keep)/sample_prob_keep)  << "\t"
+             << std::setprecision (std::numeric_limits<double>::digits10)
+             << round(profileEst[0]) << "\t"
+             << round(profileEst[1]) << "\t"
+             << round(profileEst[2]) << "\t"
+             << round(profileEst[3]) << "\t"
              << std::setprecision (6)
              << total_time
              << std::endl;

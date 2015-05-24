@@ -949,6 +949,7 @@ public:
       flag1 = our_cset->count(list.at(k).first) + our_cset->count(list.at(k).second);
             if(flag1==2) 
             edge.data().eqn10_const++;
+        }
      
     }
   }
